@@ -204,7 +204,7 @@ async function doSearch(){
   document.getElementById('map').classList.remove('visible');
   area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
  
-  const prompt=`Search the web for current happy hour deals at bars and restaurants near "${location}". Return a JSON array of up to 10 results. Each item must have: name (string), neighborhood (string), hours (string with specific times like "4-6 PM" - avoid vague terms like "Happy Hour"), days (string like "Mon-Fri" or "Daily"), deals (string, specific items and prices), address (string), website (string, official website URL if easily found otherwise empty string). Return ONLY a valid JSON array, no markdown. If none found return [].`;
+  const prompt=`Search the web for happy hour deals at bars and restaurants near "${location}". Return a JSON array of up to 10 results. Each item must have: name, neighborhood, hours, days, deals, address, website (official URL or empty string). Return ONLY a valid JSON array, no markdown, no explanation. If none found return [].`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -465,3 +465,4 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModalDirect();}
 </script>
 </body>
 </html>
+ 
