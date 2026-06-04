@@ -204,7 +204,7 @@ async function doSearch(){
   document.getElementById('map').classList.remove('visible');
   area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
  
-  const prompt=`Search the web for current happy hour deals at bars and restaurants near "${location}". Return a JSON array of up to 12 results. Each item must have: name (string), neighborhood (string), hours (string like "3-6 PM"), days (string like "Mon-Fri" or "Daily"), deals (string, brief deal description), address (string). Return ONLY a valid JSON array, no markdown. If none found return [].`;
+  const prompt=`Search the web for current happy hour deals at bars and restaurants near "${location}". For each venue, prioritize information from the venue's own official website over third-party sites like Yelp or Google. Return a JSON array of up to 12 results. Each item must have: name (string), neighborhood (string), hours (string with specific times like "4-6 PM", not just "Happy Hour"), days (string like "Mon-Fri" or "Daily" - be specific), deals (string, specific items and prices if available), address (string), website (string, the venue's official website URL if found, otherwise empty string). Only include a venue if you are confident it currently has a happy hour. Return ONLY a valid JSON array, no markdown. If none found return [].`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -326,8 +326,12 @@ function openModal(venue){
   document.getElementById('modal-overlay').classList.add('open');
   document.body.style.overflow='hidden';
  
-  // Show basic info immediately
   const on=isHappeningNow(venue.days,venue.hours);
+  // If website already found from main search, show it immediately
+  const websiteBtn = venue.website
+    ? `<a class="modal-btn modal-btn-primary" href="${venue.website}" target="_blank" rel="noopener"><i class="ti ti-world"></i> View Menu & Website</a>`
+    : '';
+ 
   modal.innerHTML=`
     <div class="modal-name">${venue.name}</div>
     <div class="modal-neighborhood"><i class="ti ti-map-pin" style="font-size:13px;"></i> ${venue.neighborhood||''}${venue.address?` · ${venue.address}`:''}</div>
@@ -343,14 +347,14 @@ function openModal(venue){
     <div class="modal-section" id="modal-extra">
       <div class="modal-loading"><div class="modal-spinner"></div><br>Finding menu & website...</div>
     </div>
-    <div class="modal-actions">
-      <a class="modal-btn modal-btn-secondary" href="https://www.google.com/maps/search/${encodeURIComponent(venue.name+' '+venue.address)}" target="_blank" rel="noopener">
+    <div class="modal-actions" id="modal-actions">
+      ${websiteBtn}
+      <a class="modal-btn modal-btn-secondary" href="https://www.google.com/maps/search/${encodeURIComponent(venue.name+' '+(venue.address||''))}" target="_blank" rel="noopener">
         <i class="ti ti-map-2"></i> Directions
       </a>
     </div>
   `;
  
-  // Fetch extra details
   fetchVenueDetails(venue);
 }
  
@@ -358,7 +362,7 @@ async function fetchVenueDetails(venue){
   const extraEl=document.getElementById('modal-extra');
   if(!extraEl)return;
  
-  const prompt=`Search the web for the official website and happy hour menu for "${venue.name}" located at "${venue.address||venue.neighborhood}". Return ONLY a JSON object with these fields: website (string, the official website URL or empty string), menu_items (array of strings, each specific happy hour menu item with price if available, up to 10 items), menu_note (string, any notes about the happy hour like "must sit at bar" or "excludes weekends", or empty string). Return ONLY valid JSON, no markdown.`;
+  const prompt=`Find the official website for the restaurant "${venue.name}" at "${venue.address||venue.neighborhood}". Then visit their website to find their current happy hour menu, hours, and deals. Return ONLY a JSON object with: website (string, the full official website URL - this is required, search hard to find it), hours (string, the exact happy hour hours from their website like "Mon-Fri 4-6 PM"), menu_items (array of strings, each specific happy hour item with price, up to 12 items), menu_note (string, any conditions like "bar seating only" or empty string), source (string, either "official website" if pulled from their site or "third party" if from Yelp/Google/other). Return ONLY valid JSON, no markdown.`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
@@ -379,46 +383,69 @@ async function fetchVenueDetails(venue){
  
     if(!extraEl||!document.getElementById('modal-overlay').classList.contains('open'))return;
  
-    if(details&&(details.website||(details.menu_items&&details.menu_items.length>0))){
+    if(details){
       let html='';
-      if(details.menu_items&&details.menu_items.length>0){
-        html+=`<div class="modal-section-title">Happy Hour Menu</div>
-          <ul class="modal-deals-list">${details.menu_items.map(item=>`<li>${item}</li>`).join('')}</ul>`;
-        if(details.menu_note){html+=`<div style="font-size:12px;color:#999;margin-top:8px;"><i class="ti ti-info-circle" style="font-size:12px;"></i> ${details.menu_note}</div>`;}
-      }
-      extraEl.innerHTML=html;
  
-      // Add website button to actions
-      if(details.website){
-        const actionsEl=document.querySelector('.modal-actions');
+      // Update hours if we got more accurate ones from official website
+      if(details.hours && details.source === 'official website'){
+        const hoursEl = document.querySelector('.modal-section div[style*="font-weight:500"]');
+        if(hoursEl) hoursEl.innerHTML = `${details.hours} <span style="font-size:11px;color:#2d6a4f;font-weight:400;">✓ from official website</span>`;
+      }
+ 
+      if(details.menu_items && details.menu_items.length > 0){
+        const sourceLabel = details.source === 'official website'
+          ? `<span style="font-size:11px;color:#2d6a4f;">✓ from official website</span>`
+          : `<span style="font-size:11px;color:#999;">⚠ from third party — verify before visiting</span>`;
+        html += `<div class="modal-section-title">Happy Hour Menu ${sourceLabel}</div>
+          <ul class="modal-deals-list">${details.menu_items.map(item => `<li>${item}</li>`).join('')}</ul>`;
+        if(details.menu_note) html += `<div style="font-size:12px;color:#999;margin-top:8px;"><i class="ti ti-info-circle" style="font-size:12px;"></i> ${details.menu_note}</div>`;
+      }
+      extraEl.innerHTML = html;
+ 
+      // Add website button if not already shown (i.e. wasn't in main search results)
+      if(details.website && !venue.website){
+        const actionsEl = document.getElementById('modal-actions');
         if(actionsEl){
-          const btn=document.createElement('a');
-          btn.className='modal-btn modal-btn-primary';
-          btn.href=details.website;
-          btn.target='_blank';
-          btn.rel='noopener';
-          btn.innerHTML='<i class="ti ti-world"></i> View Menu & Website';
+          const btn = document.createElement('a');
+          btn.className = 'modal-btn modal-btn-primary';
+          btn.href = details.website;
+          btn.target = '_blank';
+          btn.rel = 'noopener';
+          btn.innerHTML = '<i class="ti ti-world"></i> View Menu & Website';
+          actionsEl.prepend(btn);
+        }
+      } else if(!details.website && !venue.website){
+        // No website found at all — fallback to Google search
+        const actionsEl = document.getElementById('modal-actions');
+        if(actionsEl){
+          const btn = document.createElement('a');
+          btn.className = 'modal-btn modal-btn-primary';
+          btn.href = `https://www.google.com/search?q=${encodeURIComponent(venue.name+' happy hour menu')}`;
+          btn.target = '_blank';
+          btn.rel = 'noopener';
+          btn.innerHTML = '<i class="ti ti-search"></i> Search Menu Online';
           actionsEl.prepend(btn);
         }
       }
     } else {
-      // Fallback to Google search
-      extraEl.innerHTML='';
-      const actionsEl=document.querySelector('.modal-actions');
-      if(actionsEl){
-        const btn=document.createElement('a');
-        btn.className='modal-btn modal-btn-primary';
-        btn.href=`https://www.google.com/search?q=${encodeURIComponent(venue.name+' happy hour menu')}`;
-        btn.target='_blank';
-        btn.rel='noopener';
-        btn.innerHTML='<i class="ti ti-search"></i> Search Menu Online';
-        actionsEl.prepend(btn);
+      extraEl.innerHTML = '';
+      if(!venue.website){
+        const actionsEl = document.getElementById('modal-actions');
+        if(actionsEl){
+          const btn = document.createElement('a');
+          btn.className = 'modal-btn modal-btn-primary';
+          btn.href = `https://www.google.com/search?q=${encodeURIComponent(venue.name+' happy hour menu')}`;
+          btn.target = '_blank';
+          btn.rel = 'noopener';
+          btn.innerHTML = '<i class="ti ti-search"></i> Search Menu Online';
+          actionsEl.prepend(btn);
+        }
       }
     }
   }catch(err){
-    if(extraEl){
-      extraEl.innerHTML='';
-      const actionsEl=document.querySelector('.modal-actions');
+    if(extraEl) extraEl.innerHTML='';
+    if(!venue.website){
+      const actionsEl=document.getElementById('modal-actions');
       if(actionsEl){
         const btn=document.createElement('a');
         btn.className='modal-btn modal-btn-primary';
