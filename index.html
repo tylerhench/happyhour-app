@@ -32,9 +32,12 @@
     .day-btn { font-size: 13px; padding: 5px 12px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #666; cursor: pointer; transition: all 0.15s; }
     .day-btn:hover { background: #f5f5f0; }
     .day-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
-    .now-btn { font-size: 13px; padding: 5px 14px; border-radius: 20px; border: 1px solid #b7e4c7; background: #d8f3dc; color: #1b4332; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 500; }
-    .now-btn.active { background: #2d6a4f; color: #fff; border-color: #2d6a4f; }
-    .now-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+    .now-toggle-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+    .now-toggle-track { width: 44px; height: 26px; border-radius: 13px; background: #ddd; position: relative; transition: background 0.2s; }
+    .now-toggle-track.active { background: #2d6a4f; }
+    .now-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); transition: transform 0.2s; }
+    .now-toggle-track.active .now-toggle-thumb { transform: translateX(18px); }
+    .now-toggle-label { font-size: 11px; color: #999; white-space: nowrap; }
  
     /* View toggle */
     .view-toggle { display: flex; gap: 0; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 10px; overflow: hidden; background: #fff; width: fit-content; }
@@ -116,9 +119,12 @@
  
   <div class="filters-row">
     <span class="filter-label">Filter:</span>
-    <button class="now-btn" id="now-btn" onclick="toggleNow()">
-      <span class="now-dot"></span> Happening now
-    </button>
+    <div class="now-toggle-wrap" onclick="toggleNow()" title="Filter to happening now">
+      <div class="now-toggle-track" id="now-track">
+        <div class="now-toggle-thumb"></div>
+      </div>
+      <span class="now-toggle-label">Happening Now</span>
+    </div>
     <div id="day-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
   </div>
  
@@ -171,7 +177,7 @@ function initDayFilters(){const today=new Date().getDay();const c=document.getEl
 initDayFilters();
  
 function selectDay(i){selectedDay=selectedDay===i?null:i;document.querySelectorAll('.day-btn').forEach((b,idx)=>b.classList.toggle('active',idx===selectedDay));if(nowMode){nowMode=false;document.getElementById('now-btn').classList.remove('active');}if(lastResults.length)renderResults(lastResults,lastLocation);}
-function toggleNow(){nowMode=!nowMode;document.getElementById('now-btn').classList.toggle('active',nowMode);if(nowMode){selectedDay=new Date().getDay();document.querySelectorAll('.day-btn').forEach((b,i)=>b.classList.toggle('active',i===selectedDay));}if(lastResults.length)renderResults(lastResults,lastLocation);}
+function toggleNow(){nowMode=!nowMode;document.getElementById('now-track').classList.toggle('active',nowMode);if(nowMode){selectedDay=new Date().getDay();document.querySelectorAll('.day-btn').forEach((b,i)=>b.classList.toggle('active',i===selectedDay));}if(lastResults.length)renderResults(lastResults,lastLocation);}
  
 function parseHour(str){if(!str)return null;str=str.toLowerCase().replace(/\s/g,'');const m=str.match(/(\d+)(?::(\d+))?(am|pm)?/);if(!m)return null;let h=parseInt(m[1]);const min=m[2]?parseInt(m[2]):0;const p=m[3];if(p==='pm'&&h!==12)h+=12;if(p==='am'&&h===12)h=0;return h+min/60;}
 function isHappeningNow(days,hours){const now=new Date();const ch=now.getHours()+now.getMinutes()/60;const cd=now.getDay();const ds=(days||'').toLowerCase();const dn=['sun','mon','tue','wed','thu','fri','sat'];let dm=ds.includes(dn[cd])||ds.includes('daily')||ds.includes('every day');if(!dm&&ds.includes('–')){const p=ds.split('–');if(p.length===2){const s=dn.indexOf(p[0].trim().substring(0,3));const e=dn.indexOf(p[1].trim().substring(0,3));if(s>=0&&e>=0)dm=s<=cd&&cd<=e;}}if(!dm)return false;const ts=(hours||'').replace(/\s/g,'');const rp=ts.split(/[-–]/);if(rp.length>=2){const s=parseHour(rp[0]);const e=parseHour(rp[1]);if(s!==null&&e!==null)return ch>=s&&ch<=e;}return false;}
