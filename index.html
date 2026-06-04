@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -195,28 +196,59 @@ function pick([n,s]){input.value=n+', '+(STATE_NAMES[s]||s);box.innerHTML='';fil
 function detectLocation(){const icon=document.querySelector('.gps-btn i');icon.className='ti ti-loader';if(!navigator.geolocation){alert('Geolocation not supported.');icon.className='ti ti-current-location';return;}navigator.geolocation.getCurrentPosition(async pos=>{const{latitude:lat,longitude:lng}=pos.coords;try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);const d=await r.json();const a=d.address||{};const city=a.city||a.town||a.village||a.suburb||a.county||'your area';const state=a.state||'';input.value=city+(state?', '+state:'');}catch(e){input.value=`${lat.toFixed(4)}, ${lng.toFixed(4)}`;}icon.className='ti ti-current-location';doSearch();},()=>{icon.className='ti ti-current-location';alert('Could not get your location. Please type it in.');});}
  
 // Search
-async function doSearch(){
+let isLoadingMore = false;
+ 
+async function doSearch(append=false){
   const location=input.value.trim();
   if(!location)return;
   box.innerHTML='';
   const area=document.getElementById('results-area');
-  document.getElementById('view-toggle-wrap').style.display='none';
-  document.getElementById('map').classList.remove('visible');
-  area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
  
-  const prompt=`Search the web for happy hour deals at bars and restaurants near "${location}". Return a JSON array of up to 10 results. Each item must have: name, neighborhood, hours, days, deals, address, website (official URL or empty string). Return ONLY a valid JSON array, no markdown, no explanation. If none found return [].`;
+  if(!append){
+    // Fresh search — reset everything
+    lastResults=[];
+    lastLocation=location;
+    document.getElementById('view-toggle-wrap').style.display='none';
+    document.getElementById('map').classList.remove('visible');
+    area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
+  } else {
+    // Load more — append a loading indicator at the bottom
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if(loadMoreBtn) loadMoreBtn.innerHTML='<span class="spinner" style="display:inline-block;margin-right:8px;"></span>Loading more...';
+  }
+ 
+  const alreadyFound = lastResults.map(r=>r.name).join(', ');
+  const excludeClause = alreadyFound ? ` Do NOT include any of these venues already shown: ${alreadyFound}.` : '';
+  const prompt=`Search the web for happy hour specials at bars and restaurants near "${location}".${excludeClause} Find 10 different venues not already listed. For each venue return ONLY their happy hour time window (e.g. "4-6 PM"), NOT their full operating hours. Return a JSON array with each item having: name (string), neighborhood (string), hours (string - happy hour window only like "4-6 PM"), days (string like "Mon-Fri"), deals (string - specific discounts or items), address (string), website (string - official URL or empty). Return ONLY a valid JSON array, no markdown. If none found return [].`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
     const data=await res.json();
     if(data.error)throw new Error(data.error);
-    lastResults=data.results||[];
-    lastLocation=location;
+    const newResults=data.results||[];
+ 
+    if(append){
+      lastResults=[...lastResults,...newResults];
+    } else {
+      lastResults=newResults;
+    }
+ 
     if(lastResults.length>0)document.getElementById('view-toggle-wrap').style.display='block';
-    renderResults(lastResults,location);
+    renderResults(lastResults,location,newResults.length===0);
   }catch(err){
-    area.innerHTML='<div class="error-msg">Something went wrong. Please try again.</div>';
+    if(!append){
+      area.innerHTML='<div class="error-msg">Something went wrong. Please try again.</div>';
+    } else {
+      const loadMoreBtn=document.getElementById('load-more-btn');
+      if(loadMoreBtn)loadMoreBtn.innerHTML='<i class="ti ti-refresh"></i> Try again';
+    }
   }
+}
+ 
+function loadMore(){
+  if(isLoadingMore)return;
+  isLoadingMore=true;
+  doSearch(true).finally(()=>{isLoadingMore=false;});
 }
  
 // View toggle
@@ -285,7 +317,7 @@ function initMap(){
 }
  
 // Render list results
-function renderResults(results,location){
+function renderResults(results, location, noMoreResults=false){
   const area=document.getElementById('results-area');
   let fr=results;
   if(nowMode)fr=fr.filter(r=>isHappeningNow(r.days,r.hours));
@@ -315,7 +347,19 @@ function renderResults(results,location){
       </div>`;
     });
   }
+ 
   html+='<p class="disclaimer">Tap a venue for more details. Always confirm hours before heading out.</p>';
+ 
+  if(noMoreResults){
+    html+=`<div style="text-align:center;padding:1rem 0;color:#999;font-size:14px;"><i class="ti ti-check" style="font-size:13px;"></i> All results loaded for this area</div>`;
+  } else {
+    html+=`<div style="text-align:center;margin:1rem 0 0.5rem;">
+      <button id="load-more-btn" onclick="loadMore()" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:10px 24px;font-size:14px;color:#1a1a1a;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+        <i class="ti ti-plus"></i> Load more results
+      </button>
+    </div>`;
+  }
+ 
   area.innerHTML=html;
 }
  
@@ -465,4 +509,3 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModalDirect();}
 </script>
 </body>
 </html>
- 
