@@ -204,7 +204,7 @@ async function doSearch(){
   document.getElementById('map').classList.remove('visible');
   area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
  
-  const prompt=`Search the web for current happy hour deals at bars and restaurants near "${location}". For each venue, prioritize information from the venue's own official website over third-party sites like Yelp or Google. Return a JSON array of up to 12 results. Each item must have: name (string), neighborhood (string), hours (string with specific times like "4-6 PM", not just "Happy Hour"), days (string like "Mon-Fri" or "Daily" - be specific), deals (string, specific items and prices if available), address (string), website (string, the venue's official website URL if found, otherwise empty string). Only include a venue if you are confident it currently has a happy hour. Return ONLY a valid JSON array, no markdown. If none found return [].`;
+  const prompt=`Search the web for current happy hour deals at bars and restaurants near "${location}". Return a JSON array of up to 10 results. Each item must have: name (string), neighborhood (string), hours (string with specific times like "4-6 PM" - avoid vague terms like "Happy Hour"), days (string like "Mon-Fri" or "Daily"), deals (string, specific items and prices), address (string), website (string, official website URL if easily found otherwise empty string). Return ONLY a valid JSON array, no markdown. If none found return [].`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
