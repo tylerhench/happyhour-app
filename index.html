@@ -1,3 +1,4 @@
+Index · HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -211,14 +212,15 @@ async function doSearch(append=false){
     document.getElementById('map').classList.remove('visible');
     area.innerHTML='<div class="loading"><span class="spinner"></span>Searching for happy hours near '+location+'...</div>';
   } else {
-    // Load more — append a loading indicator at the bottom
+    // Load more — show spinner on button
     const loadMoreBtn = document.getElementById('load-more-btn');
-    if(loadMoreBtn) loadMoreBtn.innerHTML='<span class="spinner" style="display:inline-block;margin-right:8px;"></span>Loading more...';
+    if(loadMoreBtn) loadMoreBtn.innerHTML='<span class="spinner" style="display:inline-block;width:16px;height:16px;border:2px solid #ddd;border-top-color:#1a1a1a;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:8px;"></span>Loading more...';
   }
  
+  // Build exclude list from current results (after reset for fresh search)
   const alreadyFound = lastResults.map(r=>r.name).join(', ');
-  const excludeClause = alreadyFound ? ` Do NOT include any of these venues already shown: ${alreadyFound}.` : '';
-  const prompt=`Search the web for happy hour specials at bars and restaurants near "${location}".${excludeClause} Find 10 different venues not already listed. For each venue return ONLY their happy hour time window (e.g. "4-6 PM"), NOT their full operating hours. Return a JSON array with each item having: name (string), neighborhood (string), hours (string - happy hour window only like "4-6 PM"), days (string like "Mon-Fri"), deals (string - specific discounts or items), address (string), website (string - official URL or empty). Return ONLY a valid JSON array, no markdown. If none found return [].`;
+  const excludeClause = alreadyFound ? ` Do NOT include any of these already listed venues: ${alreadyFound}.` : '';
+  const prompt=`Search the web for happy hour specials at different bars and restaurants near "${location}".${excludeClause} Return 10 venues. For each venue return ONLY the happy hour time window (e.g. "4-6 PM"), NOT their full operating hours. Return a JSON array where each item has: name, neighborhood, hours, days, deals, address, website (official URL or empty string). Return ONLY a valid JSON array, no markdown. If none found return [].`;
  
   try{
     const res=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
